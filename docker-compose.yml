@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  web:
+    build: .
+    container_name: sicame_web
+    ports:
+      - "8000:8000"
+    command: ["sh", "./start.sh"]
+    env_file:
+      - .env
+    depends_on:
+      - postgres_db
+
+  postgres_db:
+    image: postgres
+    container_name: sicame_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${SQL_NAME}
+      - POSTGRES_USER=${SQL_USER}
+      - POSTGRES_PASSWORD=${SQL_PASSWORD}
+    ports:
+      - "5433:5432" 
+
+volumes:
+  postgres_data:
