@@ -11,6 +11,8 @@ services:
       - .env
     depends_on:
       - postgres_db
+    volumes:
+      - ./sicame:/app/sicame
 
   postgres_db:
     image: postgres
