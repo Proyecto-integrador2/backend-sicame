@@ -5,6 +5,54 @@ from rest_framework import status
 from django.http import JsonResponse
 from .models import Empleado, Asistencia
 import face_recognition
+from google.cloud import vision
+import base64
+import requests
+import tempfile
+from PIL import Image
+import numpy as np
+
+API_KEY = "AIzaSyDnS9eZlylQSIxsWBGc6AGDhqy55fYv2u0" #poner en el .env
+
+def analyze_emotion(image_path):
+    with open(image_path, 'rb') as image_file:
+        content = image_file.read()
+
+    image_base64 = base64.b64encode(content).decode('utf-8')
+    url = f'https://vision.googleapis.com/v1/images:annotate?key={API_KEY}'
+    headers = {'Content-Type': 'application/json'}
+    body = {
+        "requests": [
+            {
+                "image": {
+                    "content": image_base64
+                },
+                "features": [
+                    {
+                        "type": "FACE_DETECTION"
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=body)
+    response_data = response.json()
+
+    if 'error' in response_data:
+        raise Exception(response_data['error']['message'])
+
+    faces = response_data['responses'][0].get('faceAnnotations', [])
+    emotions = []
+    for face in faces:
+        emotions.append({
+            'joy': face.get('joyLikelihood'),
+            'sorrow': face.get('sorrowLikelihood'),
+            'anger': face.get('angerLikelihood'),
+            'surprise': face.get('surpriseLikelihood')
+        })
+
+    return emotions
 
 class RegistrarEmpleadoAPIView(APIView):
     """
@@ -92,7 +140,12 @@ class MarcarAsistenciaAPIView(APIView):
                         hora_entrada=data.get('hora_entrada'),
                         hora_salida=None
                     )
-                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre}, status=status.HTTP_200_OK)
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_image:
+                        pil_image = Image.fromarray(imagen)
+                        pil_image.save(temp_image.name)
+                        emociones = analyze_emotion(temp_image.name) # Analizar la imagen
+                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre,'emociones': emociones }, status=status.HTTP_200_OK)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
