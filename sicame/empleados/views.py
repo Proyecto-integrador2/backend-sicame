@@ -3,56 +3,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from django.http import JsonResponse
-from .models import Empleado, Asistencia
+from .models import Empleado, Asistencia, Emocion
 import face_recognition
 from google.cloud import vision
-import base64
-import requests
-import tempfile
-from PIL import Image
-import numpy as np
-
-API_KEY = "AIzaSyDnS9eZlylQSIxsWBGc6AGDhqy55fYv2u0" #poner en el .env
-
-def analyze_emotion(image_path):
-    with open(image_path, 'rb') as image_file:
-        content = image_file.read()
-
-    image_base64 = base64.b64encode(content).decode('utf-8')
-    url = f'https://vision.googleapis.com/v1/images:annotate?key={API_KEY}'
-    headers = {'Content-Type': 'application/json'}
-    body = {
-        "requests": [
-            {
-                "image": {
-                    "content": image_base64
-                },
-                "features": [
-                    {
-                        "type": "FACE_DETECTION"
-                    }
-                ]
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, json=body)
-    response_data = response.json()
-
-    if 'error' in response_data:
-        raise Exception(response_data['error']['message'])
-
-    faces = response_data['responses'][0].get('faceAnnotations', [])
-    emotions = []
-    for face in faces:
-        emotions.append({
-            'joy': face.get('joyLikelihood'),
-            'sorrow': face.get('sorrowLikelihood'),
-            'anger': face.get('angerLikelihood'),
-            'surprise': face.get('surpriseLikelihood')
-        })
-
-    return emotions
 
 class RegistrarEmpleadoAPIView(APIView):
     """
@@ -112,7 +65,7 @@ class MarcarAsistenciaAPIView(APIView):
     Returns:
         JsonResponse: Respuesta en formato JSON con el estado de la operación.
     """
-    def post(selfself, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         data = request.data
         imagen = request.FILES.get('foto')
 
@@ -134,18 +87,16 @@ class MarcarAsistenciaAPIView(APIView):
                 emparejamiento = face_recognition.compare_faces([empleado_encoding], encoding)
 
                 if emparejamiento[0]: # Sí se encontró un match en el sistema para el rostro
-                    Asistencia.objects.create(
+                    asistencia = Asistencia.objects.create(
                         empleado=empleado,
                         fecha=data.get('fecha'),
                         hora_entrada=data.get('hora_entrada'),
                         hora_salida=None
                     )
 
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_image:
-                        pil_image = Image.fromarray(imagen)
-                        pil_image.save(temp_image.name)
-                        emociones = analyze_emotion(temp_image.name) # Analizar la imagen
-                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre,'emociones': emociones }, status=status.HTTP_200_OK)
+                    # se registra la emocion de entrada
+                    registrar_emocion(asistencia, request.FILES.get('foto'))
+                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre}, status=status.HTTP_200_OK)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -191,7 +142,10 @@ class MarcarSalidaAPIView(APIView):
                     if asistencia:
                         asistencia.hora_salida = data.get('hora_salida')
                         asistencia.save()
-                        return Response({'success': f'Salida registrada correctamente', 'empleado': empleado.nombre}, status=status.HTTP_200_OK)
+
+                        # se registra la emocion de salida
+                        emocion = registrar_emocion(asistencia, request.FILES.get('foto'))
+                        return Response({'success': f'Salida registrada correctamente', 'empleado': empleado.nombre, 'emocion': emocion}, status=status.HTTP_200_OK)
                     else:
                         return Response({'error': 'No se encontró un registro de entrada activo'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -200,6 +154,49 @@ class MarcarSalidaAPIView(APIView):
             return JsonResponse({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class RegistrarEmocionAPIView(APIView):
-    def post(self, request, asistencia_id, *args, **kwargs):
-        pass
+def registrar_emocion(asistencia, imagen):
+    """
+    Usa Google Vision API para analizar la emocion en la imagen y la guarda.
+
+    - Crea un cliente de GV API
+    - Lee el rostro e identifica la emocion predominante
+    - Guarda la respectiva emoción de entrada y/o salida del empleado
+
+    Args:
+        Instancia de asistencia (ya sea para la hora de entrada o de salida) y la imagen
+    Returns:
+        JsonResponse: Respuesta en formato JSON con el estado de la operación.
+    """
+    cliente_gcv = vision.ImageAnnotatorClient()
+    imagen.seek(0)
+    content = imagen.read()
+    if not content:
+        print('No se pudo leer la imagen')
+
+    image = vision.Image(content=content)
+
+    respuesta = cliente_gcv.face_detection(image=image)
+    caras = respuesta.face_annotations
+
+    if not caras:
+        return JsonResponse({'error': 'No se detectó ningún rostro'}, status=status.HTTP_400_BAD_REQUEST)
+
+    cara = caras[0]
+    emociones = {
+        "Alegría": cara.joy_likelihood,
+        "Tristeza": cara.sorrow_likelihood,
+        "Enojo": cara.anger_likelihood,
+        "Sorpresa": cara.surprise_likelihood,
+    }
+
+    if len(set(emociones.values())) == 1:
+        emocion = "Neutral"
+    else:
+        emocion = max(emociones, key=emociones.get)
+
+    Emocion.objects.create(
+        empleado=asistencia.empleado,
+        asistencia=asistencia,
+        emocion_registrada=emocion
+    )
+    return emocion
