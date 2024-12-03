@@ -95,8 +95,10 @@ class MarcarAsistenciaAPIView(APIView):
                     )
 
                     # se registra la emocion de entrada
-                    registrar_emocion(asistencia, request.FILES.get('foto'))
-                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre}, status=status.HTTP_200_OK)
+                    resultado = registrar_emocion(asistencia, request.FILES.get('foto'))
+                    emocion = resultado['emocion']
+                    ultimo_registro = resultado['ultimo_registro']
+                    return Response({'success': f'Asistencia registrada correctamente', 'empleado': empleado.nombre, 'id': empleado.empleado_id, 'cargo': empleado.cargo, 'emocion': emocion.emocion_registrada, 'id_emocion': emocion.id, 'ultimo_registro': ultimo_registro}, status=status.HTTP_200_OK)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -144,8 +146,10 @@ class MarcarSalidaAPIView(APIView):
                         asistencia.save()
 
                         # se registra la emocion de salida
-                        emocion = registrar_emocion(asistencia, request.FILES.get('foto'))
-                        return Response({'success': f'Salida registrada correctamente', 'empleado': empleado.nombre, 'emocion': emocion}, status=status.HTTP_200_OK)
+                        resultado = registrar_emocion(asistencia, request.FILES.get('foto'))
+                        emocion = resultado['emocion']
+                        ultimo_registro = resultado['ultimo_registro']
+                        return Response({'success': f'Salida registrada correctamente',  'empleado': empleado.nombre, 'id': empleado.empleado_id, 'cargo': empleado.cargo, 'emocion': emocion.emocion_registrada, 'id_emocion': emocion.id, 'ultimo_registro': ultimo_registro}, status=status.HTTP_200_OK)
                     else:
                         return Response({'error': 'No se encontró un registro de entrada activo'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -194,9 +198,45 @@ def registrar_emocion(asistencia, imagen):
     else:
         emocion = max(emociones, key=emociones.get)
 
-    Emocion.objects.create(
+    emocion_instance = Emocion.objects.create(
         empleado=asistencia.empleado,
         asistencia=asistencia,
         emocion_registrada=emocion
     )
-    return emocion
+    ultimo_registro = Asistencia.objects.filter(empleado=asistencia.empleado).order_by('-fecha', '-hora_entrada').first()
+
+    return {
+        'ultimo_registro': {
+            'fecha': ultimo_registro.fecha,
+            'hora_entrada': ultimo_registro.hora_entrada,
+            'hora_salida': ultimo_registro.hora_salida,
+        },
+        'emocion': emocion_instance,
+    }
+
+class ActualizarObservacionesAPIView(APIView):
+    """
+    Vista para actualizar el campo observaciones de una instancia de Emocion.
+
+    - Recibe una solicitud PATCH con las nuevas observaciones
+    - Actualiza el campo observaciones de la instancia de Emocion especificada
+
+    Args:
+        request: La solicitud HTTP que contiene las nuevas observaciones
+        emocion_id: El ID de la instancia de Emocion a actualizar
+    Returns:
+        JsonResponse: Respuesta en formato JSON con el estado de la operación.
+    """
+    def patch(self, request, emocion_id, *args, **kwargs):
+        try:
+            emocion = Emocion.objects.get(id=emocion_id)
+        except Emocion.DoesNotExist:
+            return Response({'error': 'Emocion no encontrada'}, status=status.HTTP_404_NOT_FOUND)
+
+        observaciones = request.data.get('observaciones')
+        if observaciones is not None:
+            emocion.observaciones = observaciones
+            emocion.save()
+            return Response({'message': 'Observaciones actualizadas correctamente'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'El campo observaciones es requerido'}, status=status.HTTP_400_BAD_REQUEST)    

@@ -38,6 +38,7 @@ class Emocion(models.Model):
     asistencia = models.ForeignKey(Asistencia, on_delete=models.CASCADE, related_name='emociones')
     emocion_registrada = models.CharField(max_length=50)
     fecha_hora = models.DateTimeField(auto_now_add=True)
+    observaciones = models.TextField(default="Sin observaciones")
 
     def __str__(self):
         return f"{self.emocion_registrada} - {self.empleado.nombre} ({self.fecha_hora})"
