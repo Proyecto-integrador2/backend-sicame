@@ -232,6 +232,7 @@ def registrar_emocion(asistencia, imagen):
         'emocion': emocion_instance,
     }
 
+
 class ActualizarObservacionesAPIView(APIView):
     """
     Vista para actualizar el campo observaciones de una instancia de Emocion.
@@ -257,4 +258,63 @@ class ActualizarObservacionesAPIView(APIView):
             emocion.save()
             return Response({'message': 'Observaciones actualizadas correctamente'}, status=status.HTTP_200_OK)
         else:
-            return Response({'error': 'El campo observaciones es requerido'}, status=status.HTTP_400_BAD_REQUEST)    
+            return Response({'error': 'El campo observaciones es requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+class GenerarReporteAPIView(APIView):
+    """
+    Vista para generar reporte general
+
+    Args:
+        request: La solicitud HTTP mediante el metodo get
+    Returns:
+        JsonResponse: Respuesta en formato JSON con los datos de los empleados.
+    """
+    def get(self, request, *args, **kwargs):
+        reporte = []
+
+        # de empleado (nombre, id) todos los empleados
+        empleados = Empleado.objects.all()
+        print(empleados)
+
+        # de asistencia (fecha, h entrada, h salida) con id empleado
+        for empleado in empleados:
+            ultima_asistencia = empleado.asistencias.last()
+            print(ultima_asistencia, ultima_asistencia.id, "++++++++++")
+
+            # de emocion (emocion_registrada in y out , observaciones) con id asistencia
+            if ultima_asistencia:
+                emociones = Emocion.objects.filter(asistencia_id=ultima_asistencia.id).order_by('fecha_hora')
+
+                print (emociones)
+                if emociones.exists():
+                    emocion_entrada = emociones.first()
+                    emocion_salida = emociones.last()
+
+                    print(emocion_entrada, emocion_salida)
+
+                    reporte.append({
+                        "nombre": empleado.nombre,
+                        "empleado_id": empleado.empleado_id,
+                        "fecha": ultima_asistencia.fecha,
+                        "hora_entrada": ultima_asistencia.hora_entrada,
+                        "hora_salida": ultima_asistencia.hora_salida,
+                        "emocion_entrada": emocion_entrada.emocion_registrada,
+                        "comentarios_entrada": emocion_entrada.observaciones,
+                        "emocion_salida": emocion_salida.emocion_registrada,
+                        "comentarios_salida": emocion_salida.observaciones
+                    })
+                else:
+                    print("no existe")
+            else:
+                reporte.append({
+                    "nombre": empleado.nombre,
+                    "id": empleado.empleado_id,
+                    "fecha": None,
+                    "entrada": None,
+                    "salida": None,
+                    "emocion_entrada": None,
+                    "comentarios_entrada": "Sin asistencias registradas",
+                    "emocion_salida": None,
+                    "comentarios_salida": "Sin asistencias registradas"
+                })
+        return Response(reporte)
