@@ -1,23 +1,32 @@
 from rest_framework.serializers import ModelSerializer
 from .models import Empleado, Asistencia, Emocion
 
+
 class EmpleadoSerializer(ModelSerializer):
     class Meta:
         model = Empleado
-        fields = ["empleado_id", "nombre"]
+        fields = ("empleado_id", "nombre")
+
 
 class AsistenciaSerializer(ModelSerializer):
     class Meta:
         model = Asistencia
-        fields = ["fecha", "hora_entrada", "hora_salida"]
+        fields = ("fecha", "hora_entrada", "hora_salida")
+
 
 class EmocionSerializer(ModelSerializer):
     empleado = EmpleadoSerializer(many=False)
-    asistencia = AsistenciaSerializer(many=False)
+    asistencia = AsistenciaSerializer(many=True)
 
     class Meta:
         model = Emocion
-        fields = ["nombre", "empleado_id", "fecha", "hora_entrada", "hora_salida", "emocion_registrada", "observaciones"]
+        fields = (
+            "empleado",
+            "asistencia",
+            "emocion_registrada",
+            "fecha_hora",
+            "observaciones",
+        )
 
     def create(self, validated_data):
         empleado_data = validated_data.pop("empleado")
@@ -30,6 +39,8 @@ class EmocionSerializer(ModelSerializer):
         asistencia, created = Empleado.objects.get_or_create(**asistencia_data)
 
         # Create Emocion object
-        emocion = Emocion.objects.create(empleado=empleado, asistencia=asistencia, **validated_data)
+        emocion = Emocion.objects.create(
+            empleado=empleado, asistencia=asistencia, **validated_data
+        )
 
         return emocion
