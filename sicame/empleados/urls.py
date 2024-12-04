@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import VerEmocionesViewSet, RegistrarEmpleadoAPIView, MarcarAsistenciaAPIView, MarcarSalidaAPIView, ActualizarObservacionesAPIView, EmpleadoListView
+from .views import VerEmocionesViewSet, RegistrarEmpleadoAPIView, MarcarAsistenciaAPIView, MarcarSalidaAPIView, ActualizarObservacionesAPIView, EmpleadoListView, GenerarReporteAPIView
 
 router = DefaultRouter()
 router.register(r"reportes", VerEmocionesViewSet)
@@ -12,4 +12,5 @@ urlpatterns = [
     path('marcar-salida', MarcarSalidaAPIView.as_view(), name='marcar-salida'),
     path('emocion/<int:emocion_id>/actualizar_observaciones/', ActualizarObservacionesAPIView.as_view(), name='actualizar_observaciones'),
     path('empleados/', EmpleadoListView.as_view(), name='empleado-list'),
+path('generar-reporte', GenerarReporteAPIView.as_view(), name='generar-reporte'),
 ]
