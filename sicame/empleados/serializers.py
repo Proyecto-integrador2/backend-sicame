@@ -16,7 +16,7 @@ class AsistenciaSerializer(ModelSerializer):
 
 class EmocionSerializer(ModelSerializer):
     empleado = EmpleadoSerializer(many=False)
-    asistencia = AsistenciaSerializer(many=False)
+    asistencia = AsistenciaSerializer(many=True)
 
     class Meta:
         model = Emocion
