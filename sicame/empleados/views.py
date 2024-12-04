@@ -5,7 +5,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework import status
 from django.http import JsonResponse
 from .models import Empleado, Asistencia, Emocion
-from .serializers import EmocionSerializer
+from .serializers import EmocionSerializer, GestionEmpleadoSerializer
 import face_recognition
 from google.cloud import vision
 
@@ -259,6 +259,16 @@ class ActualizarObservacionesAPIView(APIView):
             return Response({'message': 'Observaciones actualizadas correctamente'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'El campo observaciones es requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+class EmpleadoListView(APIView):
+    """
+    Vista para listar empleados con su última emoción registrada.
+    """
+
+    def get(self, request, *args, **kwargs):
+        empleados = Empleado.objects.all()
+        serializer = GestionEmpleadoSerializer(empleados, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class GenerarReporteAPIView(APIView):
     """
